@@ -25,6 +25,9 @@ jobs:
       - name: Build
         run: dotnet build WorkshopApp.slnx --no-restore -c Release
 
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v4
+
       - name: Terraform fmt
         working-directory: infra
         run: terraform fmt -check -recursive
