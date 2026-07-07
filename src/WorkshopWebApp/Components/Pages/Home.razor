@@ -1,0 +1,52 @@
+﻿@page "/"
+
+<PageTitle>Workshop Web App</PageTitle>
+
+<section class="hero-shell">
+	<div class="hero-copy">
+		<p class="eyebrow">Azure Container Apps workshop</p>
+		<h1>Simple .NET website running from a container in Azure.</h1>
+		<p class="lead">
+			This sample keeps the app, Terraform, and GitHub Actions in one repo so the full path
+			from source to ACR to Container Apps is easy to demonstrate.
+		</p>
+
+		<div class="hero-actions">
+			<a class="button-primary" href="/healthz">Check health</a>
+			<a class="button-secondary" href="https://learn.microsoft.com/azure/container-apps/" target="_blank" rel="noreferrer">Learn about Container Apps</a>
+		</div>
+	</div>
+
+	<div class="hero-card">
+		<div class="status-pill">Workshop ready</div>
+		<dl>
+			<div>
+				<dt>App</dt>
+				<dd>.NET 10 Blazor Web App</dd>
+			</div>
+			<div>
+				<dt>Registry</dt>
+				<dd>Azure Container Registry</dd>
+			</div>
+			<div>
+				<dt>Hosting</dt>
+				<dd>Azure Container Apps</dd>
+			</div>
+		</dl>
+	</div>
+</section>
+
+<section class="info-grid" aria-label="Workshop architecture highlights">
+	<article>
+		<h2>App</h2>
+		<p>A small container-ready web app with a health endpoint and clean startup path.</p>
+	</article>
+	<article>
+		<h2>Infra</h2>
+		<p>Terraform provisions the resource group, registry, log workspace, and container app stack.</p>
+	</article>
+	<article>
+		<h2>Delivery</h2>
+		<p>GitHub Actions validates pull requests and manually promotes a new image revision after merge.</p>
+	</article>
+</section>

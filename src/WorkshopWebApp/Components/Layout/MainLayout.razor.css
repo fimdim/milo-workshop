@@ -1,0 +1,86 @@
+.app-shell {
+    min-height: 100vh;
+    background:
+        radial-gradient(circle at top left, rgba(17, 91, 145, 0.28), transparent 32%),
+        radial-gradient(circle at top right, rgba(196, 103, 44, 0.22), transparent 28%),
+        linear-gradient(180deg, #09111f 0%, #0f172a 100%);
+    color: #e5eef8;
+}
+
+.topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 1.5rem clamp(1.25rem, 4vw, 3rem) 0;
+}
+
+.topbar-kicker {
+    margin: 0 0 0.25rem;
+    color: #8fb3d9;
+    font-size: 0.75rem;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+}
+
+.brand {
+    color: #f8fbff;
+    font-size: clamp(1.25rem, 2.5vw, 1.8rem);
+    font-weight: 700;
+    text-decoration: none;
+}
+
+.topbar-link {
+    color: #d2e7ff;
+    text-decoration: none;
+    border: 1px solid rgba(210, 231, 255, 0.22);
+    border-radius: 999px;
+    padding: 0.65rem 1rem;
+    background: rgba(255, 255, 255, 0.04);
+}
+
+.content-shell {
+    padding: clamp(1.25rem, 4vw, 3rem);
+}
+
+#blazor-error-ui {
+    color-scheme: light only;
+    background: #fff4d6;
+    bottom: 0;
+    box-shadow: 0 -1px 2px rgba(0, 0, 0, 0.2);
+    box-sizing: border-box;
+    display: none;
+    left: 0;
+    padding: 0.6rem 1.25rem 0.7rem 1.25rem;
+    position: fixed;
+    width: 100%;
+    z-index: 1000;
+}
+
+    #blazor-error-ui .dismiss {
+        cursor: pointer;
+        position: absolute;
+        right: 0.75rem;
+        top: 0.5rem;
+    }
+
+#blazor-error-ui {
+    color-scheme: light only;
+    background: lightyellow;
+    bottom: 0;
+    box-shadow: 0 -1px 2px rgba(0, 0, 0, 0.2);
+    box-sizing: border-box;
+    display: none;
+    left: 0;
+    padding: 0.6rem 1.25rem 0.7rem 1.25rem;
+    position: fixed;
+    width: 100%;
+    z-index: 1000;
+}
+
+    #blazor-error-ui .dismiss {
+        cursor: pointer;
+        position: absolute;
+        right: 0.75rem;
+        top: 0.5rem;
+    }
