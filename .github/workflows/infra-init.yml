@@ -1,0 +1,91 @@
+name: infra-init
+
+on:
+  workflow_dispatch:
+
+jobs:
+  bootstrap-backend:
+    runs-on: ubuntu-latest
+    env:
+      LOCATION: polandcentral
+      RESOURCE_GROUP_INPUT: ""
+      STORAGE_ACCOUNT_INPUT: ""
+      CONTAINER_NAME: tfstate
+
+    steps:
+      - name: Azure login
+        env:
+          SANDBOX_CLIENT_ID: ${{ vars.SANDBOX_CLIENT_ID }}
+          SANDBOX_TENANT_ID: ${{ vars.SANDBOX_TENANT_ID }}
+          SANDBOX_CLIENT_SECRET: ${{ secrets.SANDBOX_CLIENT_SECRET }}
+        run: |
+          az login \
+            --service-principal \
+            --username "$SANDBOX_CLIENT_ID" \
+            --password "$SANDBOX_CLIENT_SECRET" \
+            --tenant "$SANDBOX_TENANT_ID"
+
+      - name: Create backend resources
+        id: backend
+        run: |
+          set -euo pipefail
+
+          GITHUB_USER="${GITHUB_USER:-${GITHUB_ACTOR}}"
+
+          if [ -n "$RESOURCE_GROUP_INPUT" ]; then
+            RESOURCE_GROUP="$RESOURCE_GROUP_INPUT"
+          else
+            RESOURCE_GROUP="rg-workshop-${GITHUB_USER}"
+          fi
+
+          if [ -n "$STORAGE_ACCOUNT_INPUT" ]; then
+            STORAGE_ACCOUNT="$(echo "$STORAGE_ACCOUNT_INPUT" | tr '[:upper:]' '[:lower:]')"
+          else
+            RANDOM_SUFFIX="$(echo "${GITHUB_REPOSITORY}-${GITHUB_USER}" | sha256sum | cut -c1-10)"
+            STORAGE_ACCOUNT="strgworkshop${RANDOM_SUFFIX}"
+          fi
+
+          echo "Creating or updating resource group '$RESOURCE_GROUP' in '$LOCATION'..."
+          az group create \
+            --name "$RESOURCE_GROUP" \
+            --location "$LOCATION" \
+            --output none
+
+          ACCOUNT_ID="$(az storage account show --name "$STORAGE_ACCOUNT" --resource-group "$RESOURCE_GROUP" --query id -o tsv 2>/dev/null || true)"
+          if [ -z "$ACCOUNT_ID" ]; then
+            echo "Creating storage account '$STORAGE_ACCOUNT'..."
+            az storage account create \
+              --name "$STORAGE_ACCOUNT" \
+              --resource-group "$RESOURCE_GROUP" \
+              --location "$LOCATION" \
+              --sku Standard_LRS \
+              --kind StorageV2 \
+              --allow-blob-public-access false \
+              --output none
+          else
+            echo "Storage account '$STORAGE_ACCOUNT' already exists in resource group '$RESOURCE_GROUP'."
+          fi
+
+          ACCOUNT_KEY="$(az storage account keys list --resource-group "$RESOURCE_GROUP" --account-name "$STORAGE_ACCOUNT" --query "[0].value" -o tsv)"
+
+          echo "Creating blob container '$CONTAINER_NAME' for Terraform state..."
+          az storage container create \
+            --name "$CONTAINER_NAME" \
+            --account-name "$STORAGE_ACCOUNT" \
+            --account-key "$ACCOUNT_KEY" \
+            --public-access off \
+            --output none
+
+          echo "resource_group=$RESOURCE_GROUP" >> "$GITHUB_OUTPUT"
+          echo "storage_account=$STORAGE_ACCOUNT" >> "$GITHUB_OUTPUT"
+          echo "container_name=$CONTAINER_NAME" >> "$GITHUB_OUTPUT"
+
+      - name: Print backend configuration hints
+        run: |
+          cat <<EOF
+          Terraform backend values:
+          - resource_group_name  = ${{ steps.backend.outputs.resource_group }}
+          - storage_account_name = ${{ steps.backend.outputs.storage_account }}
+          - container_name       = ${{ steps.backend.outputs.container_name }}
+          - key                  = terraform.tfstate
+          EOF
