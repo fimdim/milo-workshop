@@ -31,8 +31,8 @@ jobs:
         run: |
           set -euo pipefail
 
-          RESOURCE_GROUP_INPUT="$(jq -r '.RESOURCE_GROUP_INPUT // ""' <<<"$REPO_VARS_JSON")"
-          STORAGE_ACCOUNT_INPUT="$(jq -r '.STORAGE_ACCOUNT_INPUT // ""' <<<"$REPO_VARS_JSON")"
+          RESOURCE_GROUP_INPUT="$(jq -r '.RESOURCE_GROUP // .RESOURCE_GROUP_INPUT // ""' <<<"$REPO_VARS_JSON")"
+          STORAGE_ACCOUNT_INPUT="$(jq -r '.TF_STORAGE_ACCOUNT // .STORAGE_ACCOUNT // .STORAGE_ACCOUNT_INPUT // ""' <<<"$REPO_VARS_JSON")"
 
           GITHUB_USER="${GITHUB_USER:-${GITHUB_ACTOR}}"
 
