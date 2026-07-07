@@ -9,11 +9,8 @@ on:
         default: latest
 
 env:
-  ACR_NAME: ${{ vars.ACR_NAME }}
-  ACR_LOGIN_SERVER: ${{ vars.ACR_LOGIN_SERVER }}
-  CONTAINER_APP_NAME: ${{ vars.CONTAINER_APP_NAME }}
-  RESOURCE_GROUP: ${{ vars.RESOURCE_GROUP }}
   IMAGE_NAME: workshop-webapp
+  REPO_VARS_JSON: ${{ toJson(vars) }}
 
 jobs:
   deploy:
@@ -28,10 +25,70 @@ jobs:
         with:
           dotnet-version: 10.0.x
 
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v4
+
       - name: Azure login
-        uses: azure/login@v2
-        with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
+        env:
+          SANDBOX_CLIENT_ID: ${{ vars.SANDBOX_CLIENT_ID }}
+          SANDBOX_TENANT_ID: ${{ vars.SANDBOX_TENANT_ID }}
+          SANDBOX_CLIENT_SECRET: ${{ secrets.SANDBOX_CLIENT_SECRET }}
+        run: |
+          az login \
+            --service-principal \
+            --username "$SANDBOX_CLIENT_ID" \
+            --password "$SANDBOX_CLIENT_SECRET" \
+            --tenant "$SANDBOX_TENANT_ID"
+
+      - name: Resolve deployment targets
+        run: |
+          set -euo pipefail
+
+          RESOURCE_GROUP="$(jq -r '.RESOURCE_GROUP // .RESOURCE_GROUP_INPUT // ""' <<<"$REPO_VARS_JSON")"
+          TF_STORAGE_ACCOUNT="$(jq -r '.TF_STORAGE_ACCOUNT // .STORAGE_ACCOUNT // .STORAGE_ACCOUNT_INPUT // ""' <<<"$REPO_VARS_JSON")"
+
+          if [ -z "$RESOURCE_GROUP" ]; then
+            REPO_NAME="${GITHUB_REPOSITORY#*/}"
+            REPO_SLUG="$(echo "$REPO_NAME" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9-]/-/g')"
+            RESOURCE_GROUP="rg-$REPO_SLUG"
+          fi
+
+          if [ -z "$TF_STORAGE_ACCOUNT" ]; then
+            echo "TF_STORAGE_ACCOUNT repository variable is required for Terraform backend initialization."
+            exit 1
+          fi
+
+          az extension add --name containerapp --upgrade --yes
+
+          ACR_NAME="$(az acr list --resource-group "$RESOURCE_GROUP" --query "[0].name" -o tsv)"
+          CONTAINER_APP_NAME="$(az containerapp list --resource-group "$RESOURCE_GROUP" --query "[0].name" -o tsv)"
+
+          if [ -z "$ACR_NAME" ] || [ -z "$CONTAINER_APP_NAME" ]; then
+            echo "Unable to resolve ACR or Container App in resource group '$RESOURCE_GROUP'."
+            exit 1
+          fi
+
+          ACR_LOGIN_SERVER="$(az acr show --resource-group "$RESOURCE_GROUP" --name "$ACR_NAME" --query "loginServer" -o tsv)"
+
+          echo "RESOURCE_GROUP=$RESOURCE_GROUP" >> "$GITHUB_ENV"
+          echo "TF_STORAGE_ACCOUNT=$(echo "$TF_STORAGE_ACCOUNT" | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_ENV"
+          echo "ACR_NAME=$ACR_NAME" >> "$GITHUB_ENV"
+          echo "CONTAINER_APP_NAME=$CONTAINER_APP_NAME" >> "$GITHUB_ENV"
+          echo "ACR_LOGIN_SERVER=$ACR_LOGIN_SERVER" >> "$GITHUB_ENV"
+
+      - name: Initialize Terraform backend
+        working-directory: infra
+        run: |
+          terraform init \
+            -input=false \
+            -backend-config="resource_group_name=$RESOURCE_GROUP" \
+            -backend-config="storage_account_name=$TF_STORAGE_ACCOUNT" \
+            -backend-config="container_name=tfstate" \
+            -backend-config="key=terraform.tfstate"
+
+      - name: Validate Terraform
+        working-directory: infra
+        run: terraform validate
 
       - name: Build and push image
         run: |

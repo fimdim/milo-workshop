@@ -5,7 +5,7 @@ This repository contains a simple .NET 10 Blazor Web App, Terraform for the Azur
 ## Layout
 
 - `src/WorkshopWebApp` - the web app
-- `infra` - Terraform for the resource group, ACR, Log Analytics, Container Apps environment, and Container App
+- `infra` - Terraform for ACR, Log Analytics, Container Apps environment, and Container App in an existing resource group
 - `.github/workflows` - pull request validation and manual deployment
 
 ## Local run
@@ -37,11 +37,18 @@ Then browse to `http://localhost:8080` and `http://localhost:8080/healthz`.
 
 ```powershell
 cd infra
-terraform init
+az login
+terraform init `
+	-backend-config="resource_group_name=<resource-group>" `
+	-backend-config="storage_account_name=<tf-storage-account>" `
+	-backend-config="container_name=tfstate" `
+	-backend-config="key=terraform.tfstate"
 terraform fmt -recursive
 terraform validate
 terraform apply
 ```
+
+Terraform state is stored in Azure Blob Storage through the `azurerm` backend. The repository's `infra-init` workflow can create the backend resource group, storage account, and `tfstate` container for you.
 
 ## GitHub Actions
 
@@ -53,11 +60,12 @@ The `cd` workflow is triggered manually after merge. It builds and pushes the co
 
 Set these repository variables before using the deployment workflow:
 
-- `ACR_NAME`
-- `ACR_LOGIN_SERVER`
-- `CONTAINER_APP_NAME`
-- `RESOURCE_GROUP`
+- `SANDBOX_CLIENT_ID`
+- `SANDBOX_TENANT_ID`
+- `TF_STORAGE_ACCOUNT` for the Terraform state storage account name
 
 Set this secret for Azure login:
 
-- `AZURE_CREDENTIALS`
+- `SANDBOX_CLIENT_SECRET`
+
+The deployment workflow derives the resource group from the repository name as `rg-<repo-name>` (for this repo: `rg-milo-workshop`) and discovers ACR/Container App names from that resource group automatically.
