@@ -6,6 +6,9 @@ on:
       - main
   workflow_dispatch:
 
+env:
+  REPO_VARS_JSON: ${{ toJson(vars) }}
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -28,13 +31,60 @@ jobs:
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v4
 
+      - name: Resolve repository variables
+        run: |
+          set -euo pipefail
+
+          RESOURCE_GROUP_INPUT="$(jq -r '.RESOURCE_GROUP // .RESOURCE_GROUP_INPUT // ""' <<<"$REPO_VARS_JSON")"
+          STORAGE_ACCOUNT_INPUT="$(jq -r '.TF_STORAGE_ACCOUNT // .STORAGE_ACCOUNT // .STORAGE_ACCOUNT_INPUT // ""' <<<"$REPO_VARS_JSON")"
+
+          GITHUB_USER="${GITHUB_USER:-${GITHUB_ACTOR}}"
+
+          if [ -n "$RESOURCE_GROUP_INPUT" ]; then
+            RESOURCE_GROUP="$RESOURCE_GROUP_INPUT"
+          else
+            RESOURCE_GROUP="rg-workshop-${GITHUB_USER}"
+          fi
+
+          if [ -n "$STORAGE_ACCOUNT_INPUT" ]; then
+            STORAGE_ACCOUNT="$(echo "$STORAGE_ACCOUNT_INPUT" | tr '[:upper:]' '[:lower:]')"
+          else
+            RANDOM_SUFFIX="$(echo "${GITHUB_REPOSITORY}-${GITHUB_USER}" | sha256sum | cut -c1-10)"
+            STORAGE_ACCOUNT="strgworkshop${RANDOM_SUFFIX}"
+          fi
+
+          echo "RESOURCE_GROUP=$RESOURCE_GROUP" >> "$GITHUB_ENV"
+          echo "TF_STORAGE_ACCOUNT=$STORAGE_ACCOUNT" >> "$GITHUB_ENV"
+
       - name: Terraform fmt
         working-directory: infra
         run: terraform fmt -check -recursive
 
       - name: Terraform init
+        env:
+          SANDBOX_CLIENT_ID: ${{ vars.SANDBOX_CLIENT_ID }}
+          SANDBOX_TENANT_ID: ${{ vars.SANDBOX_TENANT_ID }}
+          SANDBOX_CLIENT_SECRET: ${{ secrets.SANDBOX_CLIENT_SECRET }}
         working-directory: infra
-        run: terraform init -backend=false
+        run: |
+          set -euo pipefail
+
+          if [ -n "${SANDBOX_CLIENT_ID:-}" ] && [ -n "${SANDBOX_TENANT_ID:-}" ] && [ -n "${SANDBOX_CLIENT_SECRET:-}" ] && [ -n "${RESOURCE_GROUP:-}" ] && [ -n "${TF_STORAGE_ACCOUNT:-}" ]; then
+            az login \
+              --service-principal \
+              --username "$SANDBOX_CLIENT_ID" \
+              --password "$SANDBOX_CLIENT_SECRET" \
+              --tenant "$SANDBOX_TENANT_ID"
+
+            terraform init \
+              -input=false \
+              -backend-config="resource_group_name=$RESOURCE_GROUP" \
+              -backend-config="storage_account_name=$TF_STORAGE_ACCOUNT" \
+              -backend-config="container_name=tfstate" \
+              -backend-config="key=terraform.tfstate"
+          else
+            terraform init -backend=false
+          fi
 
       - name: Terraform validate
         working-directory: infra

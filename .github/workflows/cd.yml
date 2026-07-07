@@ -44,18 +44,21 @@ jobs:
         run: |
           set -euo pipefail
 
-          RESOURCE_GROUP="$(jq -r '.RESOURCE_GROUP // .RESOURCE_GROUP_INPUT // ""' <<<"$REPO_VARS_JSON")"
-          TF_STORAGE_ACCOUNT="$(jq -r '.TF_STORAGE_ACCOUNT // .STORAGE_ACCOUNT // .STORAGE_ACCOUNT_INPUT // ""' <<<"$REPO_VARS_JSON")"
+          RESOURCE_GROUP_INPUT="$(jq -r '.RESOURCE_GROUP // .RESOURCE_GROUP_INPUT // ""' <<<"$REPO_VARS_JSON")"
+          STORAGE_ACCOUNT_INPUT="$(jq -r '.TF_STORAGE_ACCOUNT // .STORAGE_ACCOUNT // .STORAGE_ACCOUNT_INPUT // ""' <<<"$REPO_VARS_JSON")"
+          GITHUB_USER="${GITHUB_USER:-${GITHUB_ACTOR}}"
 
-          if [ -z "$RESOURCE_GROUP" ]; then
-            REPO_NAME="${GITHUB_REPOSITORY#*/}"
-            REPO_SLUG="$(echo "$REPO_NAME" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9-]/-/g')"
-            RESOURCE_GROUP="rg-$REPO_SLUG"
+          if [ -n "$RESOURCE_GROUP_INPUT" ]; then
+            RESOURCE_GROUP="$RESOURCE_GROUP_INPUT"
+          else
+            RESOURCE_GROUP="rg-workshop-${GITHUB_USER}"
           fi
 
-          if [ -z "$TF_STORAGE_ACCOUNT" ]; then
-            echo "TF_STORAGE_ACCOUNT repository variable is required for Terraform backend initialization."
-            exit 1
+          if [ -n "$STORAGE_ACCOUNT_INPUT" ]; then
+            TF_STORAGE_ACCOUNT="$(echo "$STORAGE_ACCOUNT_INPUT" | tr '[:upper:]' '[:lower:]')"
+          else
+            RANDOM_SUFFIX="$(echo "${GITHUB_REPOSITORY}-${GITHUB_USER}" | sha256sum | cut -c1-10)"
+            TF_STORAGE_ACCOUNT="strgworkshop${RANDOM_SUFFIX}"
           fi
 
           az extension add --name containerapp --upgrade --yes

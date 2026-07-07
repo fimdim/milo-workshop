@@ -62,10 +62,11 @@ Set these repository variables before using the deployment workflow:
 
 - `SANDBOX_CLIENT_ID`
 - `SANDBOX_TENANT_ID`
+- `RESOURCE_GROUP` to target a specific resource group, or omit it to use the workflow fallback
 - `TF_STORAGE_ACCOUNT` for the Terraform state storage account name
 
 Set this secret for Azure login:
 
 - `SANDBOX_CLIENT_SECRET`
 
-The deployment workflow derives the resource group from the repository name as `rg-<repo-name>` (for this repo: `rg-milo-workshop`) and discovers ACR/Container App names from that resource group automatically.
+The bootstrap, CI, and deployment workflows all resolve repository variables the same way as the infra bootstrap flow. They use `RESOURCE_GROUP` and `TF_STORAGE_ACCOUNT` when set, otherwise they fall back to `rg-workshop-<github-user>` and a deterministic `strgworkshop<hash>` storage account name.
