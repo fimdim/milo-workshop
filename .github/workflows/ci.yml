@@ -30,6 +30,8 @@ jobs:
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_wrapper: false
 
       - name: Resolve repository variables
         run: |
@@ -56,6 +58,10 @@ jobs:
           echo "RESOURCE_GROUP=$RESOURCE_GROUP" >> "$GITHUB_ENV"
           echo "TF_STORAGE_ACCOUNT=$STORAGE_ACCOUNT" >> "$GITHUB_ENV"
 
+      - name: Terraform fmt
+        working-directory: infra
+        run: terraform fmt -check -diff -recursive
+
       - name: Terraform init
         env:
           SANDBOX_CLIENT_ID: ${{ vars.SANDBOX_CLIENT_ID }}
@@ -64,6 +70,7 @@ jobs:
         working-directory: infra
         run: |
           set -euo pipefail
+          SANDBOX_SUBSCRIPTION_ID="$(jq -r '.SANDBOX_SUBSCRIPTION_ID // .AZURE_SUBSCRIPTION_ID // ""' <<<"$REPO_VARS_JSON")"
 
           if [ -n "${SANDBOX_CLIENT_ID:-}" ] && [ -n "${SANDBOX_TENANT_ID:-}" ] && [ -n "${SANDBOX_CLIENT_SECRET:-}" ] && [ -n "${RESOURCE_GROUP:-}" ] && [ -n "${TF_STORAGE_ACCOUNT:-}" ]; then
             az login \
@@ -72,12 +79,33 @@ jobs:
               --password "$SANDBOX_CLIENT_SECRET" \
               --tenant "$SANDBOX_TENANT_ID"
 
-            terraform init \
+            if [ -n "${SANDBOX_SUBSCRIPTION_ID:-}" ]; then
+              az account set --subscription "$SANDBOX_SUBSCRIPTION_ID"
+            fi
+
+            ARM_SUBSCRIPTION_ID="${SANDBOX_SUBSCRIPTION_ID:-$(az account show --query id -o tsv)}"
+
+            export ARM_CLIENT_ID="$SANDBOX_CLIENT_ID"
+            export ARM_CLIENT_SECRET="$SANDBOX_CLIENT_SECRET"
+            export ARM_TENANT_ID="$SANDBOX_TENANT_ID"
+            export ARM_SUBSCRIPTION_ID="$ARM_SUBSCRIPTION_ID"
+
+            INIT_LOG="$(mktemp)"
+            if terraform init \
               -input=false \
               -backend-config="resource_group_name=$RESOURCE_GROUP" \
               -backend-config="storage_account_name=$TF_STORAGE_ACCOUNT" \
               -backend-config="container_name=tfstate" \
-              -backend-config="key=terraform.tfstate"
+              -backend-config="key=terraform.tfstate" 2>&1 | tee "$INIT_LOG"; then
+              echo "Terraform backend initialized with remote state."
+            elif grep -qiE 'AuthorizationFailure|status 403|not authorized to perform this operation' "$INIT_LOG"; then
+              echo "::warning::Terraform backend access is not authorized for this principal. Falling back to local backend for CI validation."
+              terraform init -backend=false
+            else
+              echo "::error::terraform init failed for a non-authorization reason."
+              cat "$INIT_LOG"
+              exit 1
+            fi
           else
             terraform init -backend=false
           fi
