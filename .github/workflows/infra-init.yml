@@ -82,6 +82,24 @@ jobs:
           echo "storage_account=$STORAGE_ACCOUNT" >> "$GITHUB_OUTPUT"
           echo "container_name=$CONTAINER_NAME" >> "$GITHUB_OUTPUT"
 
+      - name: Assign Storage Blob Data Contributor to SP
+        env:
+          SANDBOX_CLIENT_ID: ${{ vars.SANDBOX_CLIENT_ID }}
+        run: |
+          STORAGE_ACCOUNT_ID="$(az storage account show \
+            --name "${{ steps.backend.outputs.storage_account }}" \
+            --resource-group "${{ steps.backend.outputs.resource_group }}" \
+            --query id -o tsv)"
+
+          SP_OBJECT_ID="$(az ad sp show --id "$SANDBOX_CLIENT_ID" --query id -o tsv)"
+
+          az role assignment create \
+            --assignee-object-id "$SP_OBJECT_ID" \
+            --assignee-principal-type ServicePrincipal \
+            --role "Storage Blob Data Contributor" \
+            --scope "$STORAGE_ACCOUNT_ID" \
+            --output none
+
       - name: Print backend configuration hints
         run: |
           cat <<EOF
