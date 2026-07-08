@@ -40,6 +40,11 @@ jobs:
             --password "$SANDBOX_CLIENT_SECRET" \
             --tenant "$SANDBOX_TENANT_ID"
 
+          SANDBOX_SUBSCRIPTION_ID="$(jq -r '.SANDBOX_SUBSCRIPTION_ID // .AZURE_SUBSCRIPTION_ID // ""' <<<"$REPO_VARS_JSON")"
+          if [ -n "${SANDBOX_SUBSCRIPTION_ID:-}" ]; then
+            az account set --subscription "$SANDBOX_SUBSCRIPTION_ID"
+          fi
+
       - name: Resolve resource group and storage account
         run: |
           set -euo pipefail
@@ -80,7 +85,7 @@ jobs:
 
       - name: Apply Terraform
         working-directory: infra
-        run: terraform apply -input=false -auto-approve
+        run: terraform apply -input=false -auto-approve -var "resource_group_name=$RESOURCE_GROUP"
 
       - name: Resolve deployment targets
         run: |
