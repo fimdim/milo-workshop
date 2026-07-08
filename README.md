@@ -57,6 +57,22 @@ Run the `infra-init` workflow manually once. It creates:
 
 After that, all subsequent `ci` and `cd` runs can initialise the Terraform backend automatically.
 
+## Repository setup
+
+Use these one-time setup steps after creating a fresh copy of the repository and before running the deployment workflows. They assume you can manage GitHub Actions variables, secrets, and workflow runs for the target repository or organization.
+
+1. Import or clone this repository into your GitHub account or organization.
+2. In your GitHub organization settings, configure these GitHub Actions values and make them available to this repository:
+   - Variable: `SANDBOX_CLIENT_ID`
+   - Variable: `SANDBOX_TENANT_ID`
+   - Secret: `SANDBOX_CLIENT_SECRET`
+3. Run the `infra-init` workflow manually to bootstrap the Terraform backend resources.
+4. Add these repository variables so the workflows use the intended backend resources:
+   - `RESOURCE_GROUP`
+   - `TF_STORAGE_ACCOUNT`
+5. Run the `ci` workflow to build the app and validate Terraform.
+6. Run the `cd` workflow and set `image_tag` to the container image tag you want to deploy, such as the tag produced for the build you validated in step 5.
+
 ## Terraform
 
 ```powershell
