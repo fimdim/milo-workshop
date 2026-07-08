@@ -1,12 +1,26 @@
 # Workshop Container Apps Demo
 
-This repository contains a simple .NET 10 Blazor Web App, Terraform for the Azure resources, and GitHub Actions workflows for CI/CD.
+A .NET 10 Blazor Server app deployed to **Azure Container Apps** using **Terraform** for infrastructure and **GitHub Actions** for CI/CD.
+
+See [architecture.md](architecture.md) for a full system diagram and component breakdown.
+
+## Prerequisites
+
+- [.NET 10 SDK](https://dotnet.microsoft.com/download)
+- [Docker](https://www.docker.com/products/docker-desktop) (for container builds)
+- [Terraform ≥ 1.6](https://developer.hashicorp.com/terraform/install)
+- [Azure CLI](https://learn.microsoft.com/cli/azure/install-azure-cli)
 
 ## Layout
 
-- `src/WorkshopWebApp` - the web app
-- `infra` - Terraform for ACR, Log Analytics, Container Apps environment, and Container App in an existing resource group
-- `.github/workflows` - pull request validation and manual deployment
+```
+.
+├── src/WorkshopWebApp/        # .NET 10 Blazor Server web app
+├── infra/                     # Terraform — ACR, Log Analytics, Container Apps env + app
+├── .github/workflows/         # ci, cd, and infra-init GitHub Actions workflows
+├── Dockerfile                 # Multi-stage build targeting port 8080
+└── WorkshopApp.slnx           # Solution file
+```
 
 ## Local run
 
@@ -15,7 +29,7 @@ dotnet restore WorkshopApp.slnx
 dotnet run --project src/WorkshopWebApp/WorkshopWebApp.csproj
 ```
 
-Open the app locally and use `/healthz` to verify the container-ready endpoint.
+Open the app locally. The `/healthz` endpoint is mapped via ASP.NET Core health checks and is available for external health checks.
 
 ## Run with Docker
 
@@ -33,40 +47,64 @@ docker run --rm -p 8080:8080 workshop-webapp:local
 
 Then browse to `http://localhost:8080` and `http://localhost:8080/healthz`.
 
+## First-time Azure setup
+
+Run the `infra-init` workflow manually once. It creates:
+
+- A resource group (`rg-workshop-<github-user>` by default)
+- An Azure Storage Account and a `tfstate` blob container for Terraform remote state
+- A `Storage Blob Data Contributor` role assignment for the deployment service principal on that storage account
+
+After that, all subsequent `ci` and `cd` runs can initialise the Terraform backend automatically.
+
 ## Terraform
 
 ```powershell
 cd infra
 az login
 terraform init `
-	-backend-config="resource_group_name=<resource-group>" `
-	-backend-config="storage_account_name=<tf-storage-account>" `
-	-backend-config="container_name=tfstate" `
-	-backend-config="key=terraform.tfstate"
+  -backend-config="resource_group_name=<resource-group>" `
+  -backend-config="storage_account_name=<tf-storage-account>" `
+  -backend-config="container_name=tfstate" `
+  -backend-config="key=terraform.tfstate"
 terraform fmt -recursive
 terraform validate
 terraform apply
 ```
 
-Terraform state is stored in Azure Blob Storage through the `azurerm` backend. The repository's `infra-init` workflow can create the backend resource group, storage account, and `tfstate` container for you.
+Terraform state is stored in Azure Blob Storage through the `azurerm` backend.
+
+**Resources created by Terraform:**
+
+| Resource | Default name |
+|---|---|
+| Log Analytics Workspace | `law-milo-workshop` |
+| Azure Container Registry (Basic) | `acrmiloworkshop<suffix>` |
+| Container Apps Environment | `aca-env-milo-workshop` |
+| Container App | `aca-workshop-milo-<suffix>` |
 
 ## GitHub Actions
 
-The `ci` workflow runs on pull requests and checks the .NET build plus Terraform formatting and validation.
+| Workflow | Trigger | Purpose |
+|---|---|---|
+| `infra-init` | Manual | Bootstraps the Terraform state backend (run once) |
+| `ci` | Pull request to `main` + manual | Builds .NET solution, checks Terraform fmt/validate |
+| `cd` | Manual (input: `image_tag`) | Applies Terraform, builds & pushes image to ACR via `az acr build`, updates Container App |
 
-The `cd` workflow is triggered manually after merge. It builds and pushes the container image to Azure Container Registry and then updates the Azure Container App to the selected image tag.
+### Required repository variables
 
-## Azure inputs
+| Variable | Description |
+|---|---|
+| `SANDBOX_CLIENT_ID` | Service principal client ID |
+| `SANDBOX_TENANT_ID` | Azure tenant ID |
+| `SANDBOX_SUBSCRIPTION_ID` | Azure subscription ID (optional; sets active subscription) |
+| `RESOURCE_GROUP` | Target resource group (falls back to `rg-workshop-<github-user>`) |
+| `TF_STORAGE_ACCOUNT` | Terraform state storage account (falls back to `strgworkshop<hash>`) |
 
-Set these repository variables before using the deployment workflow:
+### Required secret
 
-- `SANDBOX_CLIENT_ID`
-- `SANDBOX_TENANT_ID`
-- `RESOURCE_GROUP` to target a specific resource group, or omit it to use the workflow fallback
-- `TF_STORAGE_ACCOUNT` for the Terraform state storage account name
+| Secret | Description |
+|---|---|
+| `SANDBOX_CLIENT_SECRET` | Service principal client secret |
 
-Set this secret for Azure login:
-
-- `SANDBOX_CLIENT_SECRET`
-
-The bootstrap, CI, and deployment workflows all resolve repository variables the same way as the infra bootstrap flow. They use `RESOURCE_GROUP` and `TF_STORAGE_ACCOUNT` when set, otherwise they fall back to `rg-workshop-<github-user>` and a deterministic `strgworkshop<hash>` storage account name.
+> All three workflows resolve `RESOURCE_GROUP` and `TF_STORAGE_ACCOUNT` identically: use the repository variable when set, otherwise derive a deterministic name from the GitHub actor/repository.
