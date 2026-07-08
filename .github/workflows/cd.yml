@@ -40,7 +40,7 @@ jobs:
             --password "$SANDBOX_CLIENT_SECRET" \
             --tenant "$SANDBOX_TENANT_ID"
 
-      - name: Resolve deployment targets
+      - name: Resolve resource group and storage account
         run: |
           set -euo pipefail
 
@@ -61,23 +61,8 @@ jobs:
             TF_STORAGE_ACCOUNT="strgworkshop${RANDOM_SUFFIX}"
           fi
 
-          az extension add --name containerapp --upgrade --yes
-
-          ACR_NAME="$(az acr list --resource-group "$RESOURCE_GROUP" --query "[0].name" -o tsv)"
-          CONTAINER_APP_NAME="$(az containerapp list --resource-group "$RESOURCE_GROUP" --query "[0].name" -o tsv)"
-
-          if [ -z "$ACR_NAME" ] || [ -z "$CONTAINER_APP_NAME" ]; then
-            echo "Unable to resolve ACR or Container App in resource group '$RESOURCE_GROUP'."
-            exit 1
-          fi
-
-          ACR_LOGIN_SERVER="$(az acr show --resource-group "$RESOURCE_GROUP" --name "$ACR_NAME" --query "loginServer" -o tsv)"
-
           echo "RESOURCE_GROUP=$RESOURCE_GROUP" >> "$GITHUB_ENV"
           echo "TF_STORAGE_ACCOUNT=$(echo "$TF_STORAGE_ACCOUNT" | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_ENV"
-          echo "ACR_NAME=$ACR_NAME" >> "$GITHUB_ENV"
-          echo "CONTAINER_APP_NAME=$CONTAINER_APP_NAME" >> "$GITHUB_ENV"
-          echo "ACR_LOGIN_SERVER=$ACR_LOGIN_SERVER" >> "$GITHUB_ENV"
 
       - name: Initialize Terraform backend
         working-directory: infra
@@ -92,6 +77,30 @@ jobs:
       - name: Validate Terraform
         working-directory: infra
         run: terraform validate
+
+      - name: Apply Terraform
+        working-directory: infra
+        run: terraform apply -input=false -auto-approve
+
+      - name: Resolve deployment targets
+        run: |
+          set -euo pipefail
+
+          az extension add --name containerapp --upgrade --yes
+
+          ACR_NAME="$(az acr list --resource-group "$RESOURCE_GROUP" --query "[0].name" -o tsv)"
+          CONTAINER_APP_NAME="$(az containerapp list --resource-group "$RESOURCE_GROUP" --query "[0].name" -o tsv)"
+
+          if [ -z "$ACR_NAME" ] || [ -z "$CONTAINER_APP_NAME" ]; then
+            echo "Unable to resolve ACR or Container App in resource group '$RESOURCE_GROUP'."
+            exit 1
+          fi
+
+          ACR_LOGIN_SERVER="$(az acr show --resource-group "$RESOURCE_GROUP" --name "$ACR_NAME" --query "loginServer" -o tsv)"
+
+          echo "ACR_NAME=$ACR_NAME" >> "$GITHUB_ENV"
+          echo "CONTAINER_APP_NAME=$CONTAINER_APP_NAME" >> "$GITHUB_ENV"
+          echo "ACR_LOGIN_SERVER=$ACR_LOGIN_SERVER" >> "$GITHUB_ENV"
 
       - name: Build and push image
         run: |
