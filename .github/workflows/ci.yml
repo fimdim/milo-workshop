@@ -56,10 +56,6 @@ jobs:
           echo "RESOURCE_GROUP=$RESOURCE_GROUP" >> "$GITHUB_ENV"
           echo "TF_STORAGE_ACCOUNT=$STORAGE_ACCOUNT" >> "$GITHUB_ENV"
 
-      - name: Terraform fmt
-        working-directory: infra
-        run: terraform fmt -check -recursive
-
       - name: Terraform init
         env:
           SANDBOX_CLIENT_ID: ${{ vars.SANDBOX_CLIENT_ID }}

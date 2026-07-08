@@ -5,10 +5,10 @@ data "azurerm_resource_group" "this" {
 }
 
 locals {
-  rg_slug              = lower(var.resource_group_name)
-  rg_slug_no_delimiter = replace(local.rg_slug, "-", "")
-  acr_name_base        = join("", regexall("[a-z0-9]", lower(var.acr_name)))
-  acr_name             = substr("${local.acr_name_base}${random_string.name_suffix.result}", 0, 50)
+  rg_slug                 = lower(var.resource_group_name)
+  rg_slug_no_delimiter    = replace(local.rg_slug, "-", "")
+  acr_name_base           = join("", regexall("[a-z0-9]", lower(var.acr_name)))
+  acr_name                = substr("${local.acr_name_base}${random_string.name_suffix.result}", 0, 50)
   container_app_name_base = join("", regexall("[a-z0-9-]", lower(var.container_app_name)))
   container_app_name      = "${substr(local.container_app_name_base, 0, 25)}-${random_string.name_suffix.result}"
 }
